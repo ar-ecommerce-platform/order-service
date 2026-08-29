@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.ecommerce.orderservice.client.InventoryClient;
@@ -16,10 +17,11 @@ import com.ecommerce.orderservice.client.PaymentClient.PaymentResult;
 import com.ecommerce.orderservice.client.ProductClient;
 import com.ecommerce.orderservice.domain.OrderStatus;
 import com.ecommerce.orderservice.entity.OrderEntity;
-import com.ecommerce.orderservice.repository.OrderRepository;
+import com.ecommerce.orderservice.entity.OrderLine;
 import com.ecommerce.orderservice.web.dto.OrderResponse;
 import com.ecommerce.orderservice.web.dto.PlaceOrderRequest;
 import com.ecommerce.orderservice.web.dto.PlaceOrderRequest.Item;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,7 +29,7 @@ import org.mockito.Mockito;
 
 class OrderServiceTest {
 
-  private OrderRepository orderRepository;
+  private OrderTransactions store;
   private ProductClient productClient;
   private InventoryClient inventoryClient;
   private PaymentClient paymentClient;
@@ -35,17 +37,18 @@ class OrderServiceTest {
 
   @BeforeEach
   void setUp() {
-    orderRepository = Mockito.mock(OrderRepository.class);
+    store = Mockito.mock(OrderTransactions.class);
     productClient = Mockito.mock(ProductClient.class);
     inventoryClient = Mockito.mock(InventoryClient.class);
     paymentClient = Mockito.mock(PaymentClient.class);
     NotificationClient notificationClient = Mockito.mock(NotificationClient.class);
     service =
-        new OrderService(
-            orderRepository, productClient, inventoryClient, paymentClient, notificationClient);
-    when(orderRepository.save(any(OrderEntity.class)))
-        .thenAnswer(invocation -> invocation.getArgument(0));
+        new OrderService(store, productClient, inventoryClient, paymentClient, notificationClient);
+
     when(productClient.getProduct(1L)).thenReturn(new ProductClient.ProductView(1L, "Desk", 2000L));
+    when(store.createPending(eq("ada"), any()))
+        .thenReturn(
+            new OrderEntity("ada", List.of(new OrderLine(1L, 2, 2000)), OrderStatus.PENDING));
   }
 
   private static PlaceOrderRequest request(int quantity) {
@@ -55,11 +58,14 @@ class OrderServiceTest {
   @Test
   void place_confirmsOrderOnHappyPath() {
     when(paymentClient.authorize(any(), anyLong())).thenReturn(new PaymentResult(99L, "APPROVED"));
+    when(store.confirm(any(), eq(99L)))
+        .thenReturn(
+            new OrderResponse(
+                1L, "ada", OrderStatus.CONFIRMED, 4000, 99L, Instant.now(), List.of()));
 
     OrderResponse order = service.place(request(2));
 
     assertThat(order.status()).isEqualTo(OrderStatus.CONFIRMED);
-    assertThat(order.totalCents()).isEqualTo(4000L);
     assertThat(order.paymentId()).isEqualTo(99L);
   }
 
@@ -69,6 +75,7 @@ class OrderServiceTest {
 
     assertThatThrownBy(() -> service.place(request(2)))
         .isInstanceOf(StockUnavailableException.class);
+    verify(store).markRejectedStock(any());
   }
 
   @Test
@@ -77,5 +84,6 @@ class OrderServiceTest {
 
     assertThatThrownBy(() -> service.place(request(2)))
         .isInstanceOf(PaymentDeclinedException.class);
+    verify(store).markPaymentFailed(any());
   }
 }
