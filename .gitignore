@@ -1,0 +1,17 @@
+HELP.md
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+.idea
+*.iml
+out/
+
+# --- secrets: never commit ---
+.env
+*.env
+!*.env.example
+application-local.yml
+*.pem
+*.key
+*.p12
+src/main/resources/keys/
