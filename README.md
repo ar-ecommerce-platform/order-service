@@ -4,7 +4,7 @@ Order orchestration for the [ar-ecommerce-platform](https://github.com/ar-ecomme
 This is the service that ties the others together.
 
 - **Port:** 8082
-- **Persistence:** in-memory H2 (`orders`, `order_lines`) — resets on restart
+- **Persistence:** `orders` + `order_lines`. Dev: in-memory H2 (resets on restart). `prod`: PostgreSQL + Flyway.
 - **Registers with:** Eureka (discovery-server :8761)
 - Calls the other services with a `@LoadBalanced RestClient` (targets `lb://<service>`), so
   every hop goes through Eureka + Spring Cloud LoadBalancer.
@@ -83,8 +83,10 @@ End-to-end order placement is covered through the gateway in [e2e-tests](https:/
 | `SERVER_PORT` | `8082` | HTTP port |
 | `PRODUCT_SERVICE_URL` etc. | `lb://product-service` … | downstream base URLs (override to point at fixed hosts) |
 | `EUREKA_CLIENT_SERVICEURL_DEFAULTZONE` | `http://localhost:8761/eureka/` | registry URL |
+| `SPRING_PROFILES_ACTIVE` | _(none)_ | set to `prod` to use PostgreSQL + Flyway instead of H2 |
+| `SPRING_DATASOURCE_URL` / `_USERNAME` / `_PASSWORD` | - | Postgres connection (`prod` only) |
 
 ## Tech
 
-Java 21 · Spring Boot 3.5.7 · Spring Data JPA + H2 · `RestClient` + Spring Cloud LoadBalancer ·
+Java 21 · Spring Boot 3.5.7 · Spring Data JPA (H2 / PostgreSQL + Flyway) · `RestClient` + Spring Cloud LoadBalancer ·
 Spring Cloud 2025.0.0 (`netflix-eureka-client`, `loadbalancer`) · Gradle

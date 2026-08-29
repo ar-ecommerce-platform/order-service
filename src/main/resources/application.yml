@@ -2,6 +2,8 @@
 spring:
   application:
     name: order-service
+  flyway:
+    enabled: false   # dev runs on H2 + ddl-auto; the 'prod' profile enables Flyway
   datasource:
     url: jdbc:h2:mem:orderdb;DB_CLOSE_DELAY=-1
     driver-class-name: org.h2.Driver
