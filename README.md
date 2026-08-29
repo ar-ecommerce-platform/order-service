@@ -59,6 +59,23 @@ This service alone (needs discovery-server + product/inventory/payment/notificat
 
 Quality config is vendored: `gradle/quality.gradle`, `config/checkstyle/`.
 
+## Testing
+
+`./gradlew test` runs every layer below; `./gradlew build` also runs Checkstyle + Spotless and writes a JaCoCo report. The integration test needs Docker.
+
+- **Smoke** — `OrderServiceApplicationTests`: the full Spring context starts.
+- **Unit** — `service/OrderServiceTest` (Mockito): the happy path confirms and records the payment id; a `StockUnavailableException` marks the order `REJECTED_STOCK`; a declined payment marks it `PAYMENT_FAILED`.
+- **API / web slice** — `web/OrderControllerTest` (`@WebMvcTest`): `POST /orders` → 201 `CONFIRMED`; stock failure → 409 `REJECTED_STOCK`; declined payment → 402 `PAYMENT_FAILED`; empty items → 400; `GET /orders/{id}` missing → 404.
+- **Repository slice** — `repository/OrderRepositoryTest` (`@DataJpaTest`): `findByUserIdOrderByCreatedAtDesc` scopes to the user; `findWithLinesById` fetches the lines and total.
+- **Integration — real PostgreSQL** — `OrderPersistenceIntegrationTest` (`@SpringBootTest` + Testcontainers `@ServiceConnection`, downstream clients mocked): a confirmed order persists with its lines and payment id; a stock failure still persists a `REJECTED_STOCK` order as an audit record.
+
+That last test is why persistence is split into `OrderTransactions` (short independent
+transactions) rather than one `@Transactional` on `place()` — a single transaction around the
+flow rolled the audit record back when the call threw, and held a DB connection open across the
+external HTTP calls.
+
+End-to-end order placement is covered through the gateway in [e2e-tests](https://github.com/ar-ecommerce-platform/e2e-tests).
+
 ## Config
 
 | Variable | Default | Purpose |
