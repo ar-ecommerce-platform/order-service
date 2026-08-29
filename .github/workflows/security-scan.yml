@@ -1,0 +1,38 @@
+name: Security scan
+
+# Dependency vulnerability scan. Runs weekly and on demand - not on every push,
+# because the NVD download is slow. Set the repo/org variable NVD_API_KEY (as a
+# secret) to speed it up and avoid rate limits.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  owasp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: OWASP Dependency-Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: ${{ github.event.repository.name }}
+          path: "."
+          format: "HTML"
+          args: >
+            --failOnCVSS 8
+            --enableRetired
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dependency-check-report
+          path: reports/
+          if-no-files-found: ignore
