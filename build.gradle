@@ -29,6 +29,8 @@ repositories {
 
 ext {
 	set('springCloudVersion', '2025.0.0')
+	// Boot 3.5.7 BOM pins 1.21.3, which can't talk to Docker 29+ (raised min API version).
+	set('testcontainers.version', '1.21.4')
 }
 
 dependencies {
