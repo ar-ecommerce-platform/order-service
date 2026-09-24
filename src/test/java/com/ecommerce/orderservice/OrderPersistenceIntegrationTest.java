@@ -56,7 +56,7 @@ class OrderPersistenceIntegrationTest {
   @MockitoBean private NotificationClient notificationClient;
 
   private static PlaceOrderRequest twoLines() {
-    return new PlaceOrderRequest("ada", List.of(new Item(1L, 2), new Item(2L, 1)));
+    return new PlaceOrderRequest(List.of(new Item(1L, 2), new Item(2L, 1)));
   }
 
   @Test
@@ -65,7 +65,7 @@ class OrderPersistenceIntegrationTest {
     when(productClient.getProduct(2L)).thenReturn(new ProductView(2L, "Desk", 899_00));
     when(paymentClient.authorize(any(), anyLong())).thenReturn(new PaymentResult(42L, "APPROVED"));
 
-    var response = orderService.place(twoLines());
+    var response = orderService.place("ada", twoLines());
 
     assertThat(response.status()).isEqualTo(OrderStatus.CONFIRMED);
     var persisted = orderRepository.findWithLinesById(response.id()).orElseThrow();
@@ -79,7 +79,7 @@ class OrderPersistenceIntegrationTest {
     when(productClient.getProduct(anyLong())).thenReturn(new ProductView(1L, "Chair", 1000));
     doThrow(new StockUnavailableException(1L)).when(inventoryClient).reserve(anyLong(), anyInt());
 
-    assertThatThrownBy(() -> orderService.place(twoLines()))
+    assertThatThrownBy(() -> orderService.place("ada", twoLines()))
         .isInstanceOf(StockUnavailableException.class);
 
     assertThat(orderRepository.findByUserIdOrderByCreatedAtDesc("ada"))

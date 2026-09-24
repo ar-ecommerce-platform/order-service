@@ -52,7 +52,7 @@ class OrderServiceTest {
   }
 
   private static PlaceOrderRequest request(int quantity) {
-    return new PlaceOrderRequest("ada", List.of(new Item(1L, quantity)));
+    return new PlaceOrderRequest(List.of(new Item(1L, quantity)));
   }
 
   @Test
@@ -63,7 +63,7 @@ class OrderServiceTest {
             new OrderResponse(
                 1L, "ada", OrderStatus.CONFIRMED, 4000, 99L, Instant.now(), List.of()));
 
-    OrderResponse order = service.place(request(2));
+    OrderResponse order = service.place("ada", request(2));
 
     assertThat(order.status()).isEqualTo(OrderStatus.CONFIRMED);
     assertThat(order.paymentId()).isEqualTo(99L);
@@ -73,7 +73,7 @@ class OrderServiceTest {
   void place_marksRejectedStockWhenReservationFails() {
     doThrow(new StockUnavailableException(1L)).when(inventoryClient).reserve(eq(1L), anyInt());
 
-    assertThatThrownBy(() -> service.place(request(2)))
+    assertThatThrownBy(() -> service.place("ada", request(2)))
         .isInstanceOf(StockUnavailableException.class);
     verify(store).markRejectedStock(any());
   }
@@ -82,8 +82,20 @@ class OrderServiceTest {
   void place_marksPaymentFailedWhenDeclined() {
     when(paymentClient.authorize(any(), anyLong())).thenReturn(new PaymentResult(100L, "DECLINED"));
 
-    assertThatThrownBy(() -> service.place(request(2)))
+    assertThatThrownBy(() -> service.place("ada", request(2)))
         .isInstanceOf(PaymentDeclinedException.class);
     verify(store).markPaymentFailed(any());
+  }
+
+  @Test
+  void getById_someoneElsesOrder_isNotFound() {
+    when(store.getById(1L))
+        .thenReturn(
+            new OrderResponse(
+                1L, "ada", OrderStatus.CONFIRMED, 4000, 99L, Instant.now(), List.of()));
+
+    assertThat(service.getById(1L, "ada").id()).isEqualTo(1L);
+    assertThatThrownBy(() -> service.getById(1L, "mallory"))
+        .isInstanceOf(OrderNotFoundException.class);
   }
 }
