@@ -1,6 +1,7 @@
 package com.ecommerce.orderservice.web;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -26,8 +27,9 @@ import org.springframework.test.web.servlet.MockMvc;
 @WebMvcTest(OrderController.class)
 class OrderControllerTest {
 
-  private static final String ONE_ITEM =
-      "{\"userId\":\"ada\",\"items\":[{\"productId\":1,\"quantity\":2}]}";
+  private static final String ONE_ITEM = "{\"items\":[{\"productId\":1,\"quantity\":2}]}";
+
+  private static final String USER = "X-User-Id";
 
   @Autowired private MockMvc mvc;
 
@@ -46,9 +48,13 @@ class OrderControllerTest {
 
   @Test
   void place_returns201Confirmed() throws Exception {
-    when(service.place(any(PlaceOrderRequest.class))).thenReturn(confirmed());
+    when(service.place(eq("ada"), any(PlaceOrderRequest.class))).thenReturn(confirmed());
 
-    mvc.perform(post("/orders").contentType(MediaType.APPLICATION_JSON).content(ONE_ITEM))
+    mvc.perform(
+            post("/orders")
+                .header(USER, "ada")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(ONE_ITEM))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.status").value("CONFIRMED"))
         .andExpect(jsonPath("$.totalCents").value(4000));
@@ -56,18 +62,26 @@ class OrderControllerTest {
 
   @Test
   void place_stockUnavailable_returns409() throws Exception {
-    when(service.place(any())).thenThrow(new StockUnavailableException(1L));
+    when(service.place(any(), any())).thenThrow(new StockUnavailableException(1L));
 
-    mvc.perform(post("/orders").contentType(MediaType.APPLICATION_JSON).content(ONE_ITEM))
+    mvc.perform(
+            post("/orders")
+                .header(USER, "ada")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(ONE_ITEM))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("REJECTED_STOCK"));
   }
 
   @Test
   void place_paymentDeclined_returns402() throws Exception {
-    when(service.place(any())).thenThrow(new PaymentDeclinedException(1L));
+    when(service.place(any(), any())).thenThrow(new PaymentDeclinedException(1L));
 
-    mvc.perform(post("/orders").contentType(MediaType.APPLICATION_JSON).content(ONE_ITEM))
+    mvc.perform(
+            post("/orders")
+                .header(USER, "ada")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(ONE_ITEM))
         .andExpect(status().isPaymentRequired())
         .andExpect(jsonPath("$.code").value("PAYMENT_FAILED"));
   }
@@ -77,16 +91,24 @@ class OrderControllerTest {
     mvc.perform(
             post("/orders")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"userId\":\"ada\",\"items\":[]}"))
+                .header(USER, "ada")
+                .content("{\"items\":[]}"))
         .andExpect(status().isBadRequest());
   }
 
   @Test
   void getById_missing_returns404() throws Exception {
-    when(service.getById(9L)).thenThrow(new OrderNotFoundException(9L));
+    when(service.getById(9L, "ada")).thenThrow(new OrderNotFoundException(9L));
 
-    mvc.perform(get("/orders/9"))
+    mvc.perform(get("/orders/9").header(USER, "ada"))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
+  }
+
+  @Test
+  void withoutGatewayIdentity_returns400() throws Exception {
+    mvc.perform(get("/orders")).andExpect(status().isBadRequest());
+    mvc.perform(post("/orders").contentType(MediaType.APPLICATION_JSON).content(ONE_ITEM))
+        .andExpect(status().isBadRequest());
   }
 }

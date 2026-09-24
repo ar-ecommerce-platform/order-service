@@ -53,20 +53,28 @@ public class OrderService {
    * @throws StockUnavailableException if stock cannot be reserved (order saved as REJECTED_STOCK)
    * @throws PaymentDeclinedException if payment is declined (order saved as PAYMENT_FAILED)
    */
-  public OrderResponse place(PlaceOrderRequest request) {
+  public OrderResponse place(String userId, PlaceOrderRequest request) {
     List<OrderLine> lines = priceLines(request.items());
-    OrderEntity order = store.createPending(request.userId(), lines);
+    OrderEntity order = store.createPending(userId, lines);
 
     reserveStock(order.getId(), lines);
     Long paymentId = authorizePayment(order.getId(), order.getTotalCents());
 
     OrderResponse confirmed = store.confirm(order.getId(), paymentId);
-    notificationClient.orderConfirmed(request.userId(), order.getId());
+    notificationClient.orderConfirmed(userId, order.getId());
     return confirmed;
   }
 
-  public OrderResponse getById(Long id) {
-    return store.getById(id);
+  /**
+   * Returns the order if it belongs to {@code userId}. Someone else's order is reported as not
+   * found (404, not 403) so callers cannot probe which order ids exist.
+   */
+  public OrderResponse getById(Long id, String userId) {
+    OrderResponse order = store.getById(id);
+    if (!order.userId().equals(userId)) {
+      throw new OrderNotFoundException(id);
+    }
+    return order;
   }
 
   public List<OrderResponse> findByUser(String userId) {
